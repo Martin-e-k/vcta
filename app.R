@@ -12,25 +12,20 @@ USERS_FILE <- if(interactive()) "data/users.csv" else "/srv/shiny-server/vcta/da
 if (!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive = TRUE)
 if (!file.exists(USERS_FILE)) write.csv(data.frame(name = character()), USERS_FILE, row.names = FALSE)
 
-# --- Scoring constants ---
-BASE_DAY_POINTS <- 1
-DISTANCE_FACTOR <- 0.03      
-RAIN_MULTIPLIER <- 1.1
-SNACK_MULTIPLIER <- 0.4
-MECHANICAL_MULTIPLIER <- 0.4
-
 
 # --- UI ---
 ui <- fluidPage(
   titlePanel("VC Bike Ride Logger 🚴"),
   uiOutput("login_ui"),
-  uiOutput("app_ui")
+  uiOutput("app_ui"),
+  uiOutput("logout_ui")   # <- new UI output for logout
 )
 
 # --- Server ---
 server <- function(input, output, session) {
   
   user <- reactiveVal(NULL)
+  leaderboard_trigger <- reactiveVal(0)
   
   # --- Reactive list of users ---
   users <- reactiveFileReader(
@@ -43,6 +38,17 @@ server <- function(input, output, session) {
       df$name
     }
   )
+  
+  # --- Reactive leaderboard ---
+  leaderboard_data <- reactiveFileReader(
+    intervalMillis = 1000,             # checks every second
+    session = session,
+    filePath = DATA_DIR,                # folder containing user CSVs
+    readFunc = function(path) {
+      get_leaderboard(path)
+    }
+  )
+  
   
   # --- Login UI ---
   output$login_ui <- renderUI({
@@ -77,12 +83,7 @@ server <- function(input, output, session) {
       tableOutput("leaderboard"),
       br(),
       
-      # Current month rides plot
-      h4("Current month rides"),
-      plotOutput("rides_plot", height = "300px"),
-      br(),
-      
-      actionButton("logout", "Log out")
+      uiOutput("streak_summary")
     )
   })
   
@@ -151,7 +152,10 @@ server <- function(input, output, session) {
       data_dir = DATA_DIR
     )
     
-    # Optional: show a simple notification
+    # Increment trigger to update leaderboard
+    leaderboard_trigger(leaderboard_trigger() + 1)
+    
+    # Show a simple notification
     showNotification("Ride saved 🚴", type = "message")
   })
   
@@ -159,12 +163,15 @@ server <- function(input, output, session) {
   output$leaderboard <- renderTable({
     req(user())
     
+    # Make reactive to trigger
+    leaderboard_trigger()
+    
     # Get leaderboard
     df <- get_leaderboard(DATA_DIR)
     
     if (nrow(df) == 0) return(df)
     
-    # Round numeric columns to 2 decimals
+    # Round numeric columns
     df$total_km <- round(df$total_km, 2)
     df$total_score <- round(df$total_score, 2)
     
@@ -174,18 +181,89 @@ server <- function(input, output, session) {
                              ifelse(df$rank == 3, paste0("<span style='color:#cd7f32;'>", df$rank, " 🥉</span>"),
                                     df$rank)))
     
-    # Bold all cells for the logged-in user
+    # Bold logged-in user
     df[df$user == user(), ] <- lapply(df[df$user == user(), ], function(x) paste0("<b>", x, "</b>"))
     
     df
   }, striped = TRUE, bordered = TRUE, hover = TRUE, sanitize.text.function = function(x) x)
   
   
-  
-  # --- Logout ---
-  observeEvent(input$logout, {
-    user(NULL)
+  # --- Show personal summary ---
+  output$streak_summary <- renderUI({
+    req(user())
+    
+    # --- Load current user rides ---
+    file <- file.path(DATA_DIR, paste0(user(), ".csv"))
+    if (!file.exists(file)) return("No rides logged yet!")
+    
+    df <- read.csv(file, stringsAsFactors = FALSE)
+    df$date <- as.Date(df$date)
+    
+    # Filter current month
+    today <- Sys.Date()
+    df <- df[df$date >= as.Date(format(today, "%Y-%m-01")) &
+               df$date <= today, ]
+    
+    days_ridden <- length(unique(df$date))
+    total_days <- as.numeric(format(today, "%d"))
+    progress <- days_ridden / total_days
+    
+    # --- Leaderboard data (reactive) ---
+    leaderboard_trigger()  # make reactive
+    lb <- get_leaderboard(DATA_DIR)
+    
+    # Current user score
+    user_row <- lb[lb$user == user(), ]
+    user_score <- if(nrow(user_row) == 0) 0 else user_row$total_score
+    
+    # Top scorer
+    top_row <- lb[which.max(lb$total_score), ]
+    top_score <- top_row$total_score
+    top_name <- top_row$user
+    
+    # Determine rank
+    user_rank <- which(lb$user == user())
+    
+    # Determine points behind
+    points_behind <- round(top_score - user_score, 2)
+    
+    # Assign message
+    msg <- if (user_rank == 1) {
+      "🔥 You’re leading! Keep it up!"
+    } else if (user_rank == 2) {
+      paste0("Only ", points_behind, " points to catch ", top_name, " — go get ’em!")
+    } else if (user_rank == 3) {
+      paste0("Almost there! Push a little more and take the podium 🏆")
+    } else if (user_rank <= 10) {
+      paste0("You’re close! Keep riding to get into the top 3!")
+    } else {
+      paste0("Don’t worry, even ", user(), " had to start somewhere 😏 — ride to catch up!")
+    }
+    
+    # --- UI ---
+    tags$div(
+      tags$h4("Your monthly streak 🚴"),
+      tags$div(
+        style = "background: lightgray; width: 100%; height: 20px; border-radius: 5px;",
+        tags$div(
+          style = sprintf("background: steelblue; width: %.1f%%; height: 20px; border-radius: 5px;", progress*100)
+        )
+      ),
+      tags$p(paste0(days_ridden, "/", total_days, " days ridden this month")),
+      tags$p(msg)
+    )
   })
+  
+  output$logout_ui <- renderUI({
+    req(user())   # only show if logged in
+    actionButton("logout", "Log out")
+  })
+  
+  # --- Logout logic ---
+  observeEvent(input$logout, {
+    user(NULL)  # resets logged-in user
+  })
+  
   
 }
 

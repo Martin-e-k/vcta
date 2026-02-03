@@ -12,55 +12,38 @@ read_users <- function(users_file) {
 ######################################################################################################
 
 # Log data
-save_ride_day <- function(
-    user,
-    date,
-    distance,
-    rain,
-    snacks,
-    mechanical,
-    data_dir
-) {
+save_ride_day <- function(user, date, distance, rain, snacks, mechanical, data_dir) {
   file <- file.path(data_dir, paste0(user, ".csv"))
   
-  date <- as.Date(date)
-  distance <- as.numeric(distance)
+  # Create row for this ride day
+  new_row <- data.frame(
+    date = as.Date(date),
+    distance_km = distance,
+    rain = rain,
+    snacks = snacks,
+    mechanical = mechanical
+  )
   
-  if (!file.exists(file)) {
-    df <- data.frame(
-      date = date,
-      distance_km = distance,
-      rain = rain,
-      snacks = snacks,
-      mechanical = mechanical
-    )
+  if (file.exists(file)) {
+    df <- read.csv(file, stringsAsFactors = FALSE)
+    df$date <- as.Date(df$date)
+    
+    # Remove any existing row for this date
+    df <- df[df$date != new_row$date, ]
+    
+    # Add new row
+    df <- rbind(df, new_row)
+    
+    # Sort by date
+    df <- df[order(df$date), ]
+    
+    # Write back
     write.csv(df, file, row.names = FALSE)
-    return(invisible(TRUE))
-  }
-  
-  df <- read.csv(file, stringsAsFactors = FALSE)
-  df$date <- as.Date(df$date)
-  
-  if (date %in% df$date) {
-    i <- which(df$date == date)
-    df$distance_km[i] <- df$distance_km[i] + distance
-    df$rain[i]       <- df$rain[i] | rain
-    df$snacks[i]    <- df$snacks[i] | snacks
-    df$mechanical[i]<- df$mechanical[i] | mechanical
+    
   } else {
-    df <- rbind(df, data.frame(
-      date = date,
-      distance_km = distance,
-      rain = rain,
-      snacks = snacks,
-      mechanical = mechanical
-    ))
+    # File does not exist yet, just write the new row
+    write.csv(new_row, file, row.names = FALSE)
   }
-  
-  df <- df[order(df$date), ]
-  write.csv(df, file, row.names = FALSE)
-  
-  invisible(TRUE)
 }
 
 ######################################################################################################
