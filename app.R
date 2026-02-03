@@ -64,11 +64,16 @@ server <- function(input, output, session) {
       actionButton("save", "Log ride"),
       br(), br(),
       
-      # Visualization of current month
+      # Leaderboard
+      h4("Leaderboard (Current Month)"),
+      tableOutput("leaderboard"),
+      br(),
+      
+      # Current month rides plot
       h4("Current month rides"),
       plotOutput("rides_plot", height = "300px"),
+      br(),
       
-      br(), br(),
       actionButton("logout", "Log out")
     )
   })
@@ -141,6 +146,28 @@ server <- function(input, output, session) {
     # Optional: show a simple notification
     showNotification("Ride saved 🚴", type = "message")
   })
+  
+  # --- Show leaderboard ---
+  output$leaderboard <- renderTable({
+    req(user())
+    
+    # Get leaderboard
+    df <- get_leaderboard(DATA_DIR)
+    
+    if (nrow(df) == 0) return(df)
+    
+    # Highlight top 3 ranks with medals
+    df$rank <- ifelse(df$rank == 1, paste0("<span style='color:gold;'>", df$rank, " 🥇</span>"),
+                      ifelse(df$rank == 2, paste0("<span style='color:silver;'>", df$rank, " 🥈</span>"),
+                             ifelse(df$rank == 3, paste0("<span style='color:#cd7f32;'>", df$rank, " 🥉</span>"),
+                                    df$rank)))
+    
+    # Bold all cells for the logged-in user
+    df[df$user == user(), ] <- lapply(df[df$user == user(), ], function(x) paste0("<b>", x, "</b>"))
+    
+    df
+  }, striped = TRUE, bordered = TRUE, hover = TRUE, sanitize.text.function = function(x) x)
+  
   
   # --- Logout ---
   observeEvent(input$logout, {
