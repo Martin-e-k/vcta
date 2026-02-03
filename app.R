@@ -1,108 +1,108 @@
-# This is a shiny app made to have a fun internal competition similar to the Vi cykler til arbejde
-# Users can log bikerides and see who biked the most and perhaps win a small price
-
+# Load packages
 library(shiny)
 
-# Set paths
+# Load home cooked functions
+
+# --- Paths ---
 DATA_DIR <- if(interactive()) "data/rides" else "/srv/shiny-server/vcta/data/rides"
 USERS_FILE <- if(interactive()) "data/users.csv" else "/srv/shiny-server/vcta/data/users.csv"
 
-
-# --- 2️⃣ Ensure folders/files exist ---
+# --- Ensure folders/files exist ---
 if (!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive = TRUE)
 if (!file.exists(USERS_FILE)) write.csv(data.frame(name = character()), USERS_FILE, row.names = FALSE)
 
-# --- 3️⃣ Helper function to read users ---
-read_users <- function() {
-  df <- read.csv(USERS_FILE, stringsAsFactors = FALSE)
-  if (nrow(df) == 0) return(character(0))
-  df$name
-}
 
-# --- 4️⃣ UI ---
+# --- UI ---
 ui <- fluidPage(
-  titlePanel("KBA cykler til arbejde 🚴"),
-  uiOutput("main_ui")
+  titlePanel("VC Bike Ride Logger 🚴"),
+  uiOutput("login_ui"),
+  uiOutput("app_ui")
 )
 
-# --- 5️⃣ Server ---
+# --- Server ---
 server <- function(input, output, session) {
   
-  user <- reactiveVal(NULL)  # store logged-in user
+  user <- reactiveVal(NULL)
   
-  users <- reactive({
-    read_users()
-  })
+  # --- Reactive list of users ---
+  users <- reactiveFileReader(
+    intervalMillis = 1000,        # check every 1 second
+    session = session,
+    filePath = USERS_FILE,
+    readFunc = function(path) {
+      df <- read.csv(path, stringsAsFactors = FALSE)
+      if (nrow(df) == 0) return(character(0))
+      df$name
+    }
+  )
   
-  # --- 5a. Render login / main UI ---
-  output$main_ui <- renderUI({
+  # --- Login UI ---
+  output$login_ui <- renderUI({
     if (is.null(user())) {
-      # LOGIN PAGE
       fluidPage(
         h3("Sign in"),
         selectInput("existing_user", "Existing user", choices = c("", users())),
         textInput("new_user", "Or create new user"),
         actionButton("login", "Enter")
       )
-    } else {
-      # MAIN APP
-      fluidPage(
-        h4(paste("Logged in as", user())),
-        dateInput("date", "Date", Sys.Date()),
-        numericInput("distance", "Distance (km)", 0, min = 0),
-        numericInput("duration", "Duration (minutes)", 0, min = 0),
-        actionButton("save", "Log ride"),
-        br(), br(),
-        actionButton("logout", "Log out")
-      )
     }
   })
   
-  # --- 5b. Login logic ---
+  # --- Main app UI ---
+  output$app_ui <- renderUI({
+    req(user())
+    fluidPage(
+      h4(paste("Logged in as", user())),
+      dateInput("date", "Date", Sys.Date()),
+      numericInput("distance", "Distance (km)", 0, min = 0),
+      numericInput("duration", "Duration (minutes)", 0, min = 0),
+      actionButton("save", "Log ride"),
+      br(), br(),
+      actionButton("logout", "Log out")
+    )
+  })
+  
+  # --- Login logic ---
   observeEvent(input$login, {
     name <- if (nzchar(input$new_user)) input$new_user else input$existing_user
-    req(nzchar(name))  # make sure something is entered
-    
-    name <- tolower(trimws(name))
+    req(nzchar(name))
+    name <- trimws(name)
     user(name)
     
-    if (!(name %in% users())) {
-      # Append new user
-      write.table(
-        data.frame(name = name),
-        USERS_FILE,
-        sep = ",",
-        row.names = FALSE,
-        col.names = FALSE,
-        append = TRUE
-      )
+    # --- Add new user if not present ---
+    current_users <- read.csv(USERS_FILE, stringsAsFactors = FALSE)
+    if (!(name %in% current_users$name)) {
+      current_users <- rbind(current_users, data.frame(name = name))
+      write.csv(current_users, USERS_FILE, row.names = FALSE)
     }
   })
   
-  # --- 5c. Save ride ---
+  
+  # --- Save ride ---
   observeEvent(input$save, {
     req(user())
-    file <- file.path(DATA_DIR, paste0(user(), ".csv"))
     
-    row <- data.frame(
-      name = user(),
+    # Call the reusable function
+    save_ride_day(
+      user = user(),
       date = input$date,
       distance = input$distance,
-      duration = input$duration
+      rain = input$rain,
+      snacks = input$snacks,
+      mechanical = input$mechanical,
+      data_dir = DATA_DIR
     )
     
-    if (file.exists(file)) {
-      write.table(row, file, sep = ",", row.names = FALSE, col.names = FALSE, append = TRUE)
-    } else {
-      write.csv(row, file, row.names = FALSE)
-    }
+    # Optional: show a simple notification
+    showNotification("Ride saved 🚴", type = "message")
   })
   
-  # --- 5d. Logout ---
+  # --- Logout ---
   observeEvent(input$logout, {
     user(NULL)
   })
+  
 }
 
-# --- 6️⃣ Run app ---
+# --- Run app ---
 shinyApp(ui, server)
