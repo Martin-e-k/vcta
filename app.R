@@ -189,6 +189,7 @@ server <- function(input, output, session) {
   
   
   # --- Show personal summary ---
+  # --- Show personal summary ---
   output$streak_summary <- renderUI({
     req(user())
     
@@ -227,17 +228,47 @@ server <- function(input, output, session) {
     # Determine points behind
     points_behind <- round(top_score - user_score, 2)
     
-    # Assign message
+    # --- Emoji-enhanced motivational messages ---
+    top1_msgs <- c(
+      "🔥 You’re leading! Keep it up! 🚴‍♂️💨",
+      "🏆 Top of the leaderboard! Don’t slow down! 🎯",
+      "Champion mode activated! 🚴‍♀️🥇💪"
+    )
+    
+    top2_msgs <- c(
+      paste0("Only ", points_behind, " points to catch ", top_name, " — go get ’em! ⚡🚴"),
+      paste0("Close! ", points_behind, " points away from ", top_name, " — pedal fast! 🏁"),
+      paste0("Second place! Just ", points_behind, " points to take the lead! 🌟🚴‍♂️")
+    )
+    
+    top3_msgs <- c(
+      "Almost there! Push a little more and take the podium 🏆🚴‍♀️",
+      "Third place is yours to improve — ride on! ⚡💪",
+      "Keep it up! Podium is within reach! 🚴‍♂️🥉"
+    )
+    
+    top10_msgs <- c(
+      "You’re close! Keep riding to get into the top 3! 🚴‍♀️💨",
+      "Top 10! Just a bit more effort to reach the podium! 🌟🚴",
+      "Almost there — consistency pays off 🚴‍♂️✨"
+    )
+    
+    bottom_msgs <- c(
+      paste0("Don’t worry, even ", user(), " had to start somewhere 😏 — ride to catch up! 🚲"),
+      "Everyone starts somewhere — pedal and climb up! 🌄🚴‍♀️",
+      "Keep going! Every ride counts! 💪🚲"
+    )
+    
     msg <- if (user_rank == 1) {
-      "🔥 You’re leading! Keep it up!"
+      sample(top1_msgs, 1)
     } else if (user_rank == 2) {
-      paste0("Only ", points_behind, " points to catch ", top_name, " — go get ’em!")
+      sample(top2_msgs, 1)
     } else if (user_rank == 3) {
-      paste0("Almost there! Push a little more and take the podium 🏆")
+      sample(top3_msgs, 1)
     } else if (user_rank <= 10) {
-      paste0("You’re close! Keep riding to get into the top 3!")
+      sample(top10_msgs, 1)
     } else {
-      paste0("Don’t worry, even ", user(), " had to start somewhere 😏 — ride to catch up!")
+      sample(bottom_msgs, 1)
     }
     
     # --- UI ---
@@ -253,6 +284,7 @@ server <- function(input, output, session) {
       tags$p(msg)
     )
   })
+  
   
   output$logout_ui <- renderUI({
     req(user())   # only show if logged in

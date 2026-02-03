@@ -89,7 +89,7 @@ get_leaderboard <- function(data_dir) {
 
 # --- Scoring constants ---
 BASE_DAY_POINTS <- 1
-DISTANCE_FACTOR <- 0.01      
+DISTANCE_FACTOR <- 0.005      
 RAIN_MULTIPLIER <- 1.1
 SNACK_MULTIPLIER <- 0.4
 MECHANICAL_MULTIPLIER <- 0.4
