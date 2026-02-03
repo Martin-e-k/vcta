@@ -55,20 +55,24 @@ server <- function(input, output, session) {
     fluidPage(
       h4(paste("Logged in as", user())),
       
-      # Ride entry
+      # Data entry
       dateInput("date", "Date", Sys.Date()),
       numericInput("distance", "Distance (km)", 0, min = 0, step = 0.1),
-      
       checkboxInput("rain", "Did it rain?"),
       checkboxInput("snacks", "Did you bring snacks for the team?"),
       checkboxInput("mechanical", "Did you have a mechanical?"),
-      
       actionButton("save", "Log ride"),
       br(), br(),
       
+      # Visualization of current month
+      h4("Current month rides"),
+      plotOutput("rides_plot", height = "300px"),
+      
+      br(), br(),
       actionButton("logout", "Log out")
     )
   })
+  
   
   # --- Login logic ---
   observeEvent(input$login, {
@@ -83,6 +87,39 @@ server <- function(input, output, session) {
       current_users <- rbind(current_users, data.frame(name = name))
       write.csv(current_users, USERS_FILE, row.names = FALSE)
     }
+  })
+  
+  # Plot user rides
+  output$rides_plot <- renderPlot({
+    req(user())  # ensures a user is logged in before plotting
+    
+    # File path for current user
+    file <- file.path(DATA_DIR, paste0(user(), ".csv"))
+    if (!file.exists(file)) return(NULL)  # nothing to plot yet
+    
+    # Load user's rides
+    df <- read.csv(file, stringsAsFactors = FALSE)
+    df$date <- as.Date(df$date)
+    
+    # Filter to current month
+    today <- Sys.Date()
+    df <- df[df$date >= as.Date(format(today, "%Y-%m-01")) &
+               df$date <= today, ]
+    
+    if (nrow(df) == 0) return(NULL)  # no rides this month yet
+    
+    # Load ggplot2 if not already
+    library(ggplot2)
+    
+    # Create a simple bar chart
+    ggplot(df, aes(x = date, y = distance_km)) +
+      geom_col(fill = "steelblue") +
+      labs(
+        x = "Date",
+        y = "Distance (km)",
+        title = paste("Rides in", format(today, "%B %Y"))
+      ) +
+      theme_minimal()
   })
   
   
