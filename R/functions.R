@@ -9,7 +9,7 @@ read_users <- function(users_file) {
   df$name
 }
 
-
+######################################################################################################
 
 # Log data
 save_ride_day <- function(
@@ -63,7 +63,7 @@ save_ride_day <- function(
   invisible(TRUE)
 }
 
-
+######################################################################################################
 # Get leaderboard function
 get_leaderboard <- function(data_dir) {
   files <- list.files(data_dir, pattern = "\\.csv$", full.names = TRUE)
@@ -80,18 +80,13 @@ get_leaderboard <- function(data_dir) {
     df <- df[df$date >= first_day & df$date <= today, ]
     if (nrow(df) == 0) return(NULL)
     
-    # Calculate score per day
-    df$score <- 1 + 0.1 * df$distance_km +
-      0.5 * as.numeric(df$rain) +
-      0.5 * as.numeric(df$snacks) +
-      0.5 * as.numeric(df$mechanical)
-    
     data.frame(
       user = tools::file_path_sans_ext(basename(f)),
       days_ridden = nrow(df),
       total_km = sum(df$distance_km, na.rm = TRUE),
-      total_score = sum(df$score, na.rm = TRUE)
+      total_score = compute_total_score(df)
     )
+    
   })
   
   leaderboard <- do.call(rbind, leaderboard)
@@ -105,4 +100,53 @@ get_leaderboard <- function(data_dir) {
   leaderboard <- leaderboard[, c("rank", "user", "days_ridden", "total_km", "total_score")]
   
   leaderboard
+}
+
+######################################################################################################
+
+# --- Scoring constants ---
+BASE_DAY_POINTS <- 1
+DISTANCE_FACTOR <- 0.01      
+RAIN_MULTIPLIER <- 1.1
+SNACK_MULTIPLIER <- 0.4
+MECHANICAL_MULTIPLIER <- 0.4
+
+# Scoring function
+compute_total_score <- function(df) {
+  df <- df[order(df$date), ]
+  
+  total_score <- 0
+  snacks_so_far <- 0
+  mechanicals_so_far <- 0
+  
+  for (i in seq_len(nrow(df))) {
+    day <- df[i, ]
+    
+    # Base points
+    score <- BASE_DAY_POINTS
+    
+    # Distance bonus
+    score <- score + day$distance_km * DISTANCE_FACTOR
+    
+    # Rain multiplier
+    if (isTRUE(day$rain)) {
+      score <- score * RAIN_MULTIPLIER
+    }
+    
+    # Snacks (diminishing)
+    if (isTRUE(day$snacks)) {
+      snacks_so_far <- snacks_so_far + 1
+    }
+    score <- score + SNACK_MULTIPLIER * log1p(snacks_so_far)
+    
+    # Mechanicals (diminishing)
+    if (isTRUE(day$mechanical)) {
+      mechanicals_so_far <- mechanicals_so_far + 1
+    }
+    score <- score + MECHANICAL_MULTIPLIER * log1p(mechanicals_so_far)
+    
+    total_score <- total_score + score
+  }
+  
+  total_score
 }

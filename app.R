@@ -2,6 +2,7 @@
 library(shiny)
 
 # Load home cooked functions
+source("R/functions.R")
 
 # --- Paths ---
 DATA_DIR <- if(interactive()) "data/rides" else "/srv/shiny-server/vcta/data/rides"
@@ -10,6 +11,13 @@ USERS_FILE <- if(interactive()) "data/users.csv" else "/srv/shiny-server/vcta/da
 # --- Ensure folders/files exist ---
 if (!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive = TRUE)
 if (!file.exists(USERS_FILE)) write.csv(data.frame(name = character()), USERS_FILE, row.names = FALSE)
+
+# --- Scoring constants ---
+BASE_DAY_POINTS <- 1
+DISTANCE_FACTOR <- 0.03      
+RAIN_MULTIPLIER <- 1.1
+SNACK_MULTIPLIER <- 0.4
+MECHANICAL_MULTIPLIER <- 0.4
 
 
 # --- UI ---
@@ -156,6 +164,10 @@ server <- function(input, output, session) {
     
     if (nrow(df) == 0) return(df)
     
+    # Round numeric columns to 2 decimals
+    df$total_km <- round(df$total_km, 2)
+    df$total_score <- round(df$total_score, 2)
+    
     # Highlight top 3 ranks with medals
     df$rank <- ifelse(df$rank == 1, paste0("<span style='color:gold;'>", df$rank, " 🥇</span>"),
                       ifelse(df$rank == 2, paste0("<span style='color:silver;'>", df$rank, " 🥈</span>"),
@@ -167,6 +179,7 @@ server <- function(input, output, session) {
     
     df
   }, striped = TRUE, bordered = TRUE, hover = TRUE, sanitize.text.function = function(x) x)
+  
   
   
   # --- Logout ---
