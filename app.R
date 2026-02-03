@@ -51,13 +51,21 @@ server <- function(input, output, session) {
   # --- Main app UI ---
   output$app_ui <- renderUI({
     req(user())
+    
     fluidPage(
       h4(paste("Logged in as", user())),
+      
+      # Ride entry
       dateInput("date", "Date", Sys.Date()),
-      numericInput("distance", "Distance (km)", 0, min = 0),
-      numericInput("duration", "Duration (minutes)", 0, min = 0),
+      numericInput("distance", "Distance (km)", 0, min = 0, step = 0.1),
+      
+      checkboxInput("rain", "Did it rain?"),
+      checkboxInput("snacks", "Did you bring snacks for the team?"),
+      checkboxInput("mechanical", "Did you have a mechanical?"),
+      
       actionButton("save", "Log ride"),
       br(), br(),
+      
       actionButton("logout", "Log out")
     )
   })
