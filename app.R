@@ -189,7 +189,6 @@ server <- function(input, output, session) {
   
   
   # --- Show personal summary ---
-  # --- Show personal summary ---
   output$streak_summary <- renderUI({
     req(user())
     
@@ -224,6 +223,7 @@ server <- function(input, output, session) {
     
     # Determine rank
     user_rank <- which(lb$user == user())
+    n_users <- nrow(lb)
     
     # Determine points behind
     points_behind <- round(top_score - user_score, 2)
@@ -253,12 +253,20 @@ server <- function(input, output, session) {
       "Almost there — consistency pays off 🚴‍♂️✨"
     )
     
+    # Friendly mocking messages for last place
+    last_place_msgs <- c(
+      paste0("Ouch! You're in last 😅. Even ", user(), " can catch up! 🚲💨"),
+      paste0("Last place! Time to pedal faster! 🐌🚴‍♂️"),
+      paste0("Don't worry, ", user(), ", the leaderboard won't stay empty forever! 😏🚲")
+    )
+    
     bottom_msgs <- c(
       paste0("Don’t worry, even ", user(), " had to start somewhere 😏 — ride to catch up! 🚲"),
       "Everyone starts somewhere — pedal and climb up! 🌄🚴‍♀️",
       "Keep going! Every ride counts! 💪🚲"
     )
     
+    # --- Pick a random message depending on rank ---
     msg <- if (user_rank == 1) {
       sample(top1_msgs, 1)
     } else if (user_rank == 2) {
@@ -267,6 +275,9 @@ server <- function(input, output, session) {
       sample(top3_msgs, 1)
     } else if (user_rank <= 10) {
       sample(top10_msgs, 1)
+    } else if (user_rank == n_users) {
+      # Last place gets playful mocking
+      sample(last_place_msgs, 1)
     } else {
       sample(bottom_msgs, 1)
     }
@@ -284,6 +295,7 @@ server <- function(input, output, session) {
       tags$p(msg)
     )
   })
+  
   
   
   output$logout_ui <- renderUI({
