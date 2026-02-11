@@ -15,7 +15,7 @@ if (!file.exists(USERS_FILE)) write.csv(data.frame(name = character()), USERS_FI
 
 # --- UI ---
 ui <- fluidPage(
-  titlePanel("VC Bike Ride Logger 🚴"),
+  titlePanel("Bike Ride Logger 🚴"),
   uiOutput("login_ui"),
   uiOutput("app_ui"),
   uiOutput("logout_ui")   # <- new UI output for logout
