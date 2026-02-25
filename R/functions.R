@@ -1,7 +1,5 @@
 # R/functions.R
 
-
-
 # Read user
 read_users <- function(users_file) {
   df <- read.csv(users_file, stringsAsFactors = FALSE)
