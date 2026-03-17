@@ -179,7 +179,11 @@ server <- function(input, output, session) {
     df <- get_team_leaderboard(DATA_DIR,
                                year_month = input$selected_month,
                                users_df   = users_df())
-    if (nrow(df) == 0) return(data.frame(Message = "No team data available."))
+    if (nrow(df) == 0) return(data.frame(Message = "No team data available (minimum 5 active riders required)."))
+    
+    # Keep and rename relevant columns only
+    df <- df[, c("rank", "team", "active_riders", "total_km", "avg_score")]
+    names(df)[names(df) == "avg_score"] <- "team_score"
     
     # Medal ranks
     df$rank <- ifelse(df$rank == 1, paste0("<span style='color:gold;'>",     df$rank, " 🥇</span>"),

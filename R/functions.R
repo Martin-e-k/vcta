@@ -96,25 +96,64 @@ get_leaderboard <- function(data_dir, year_month = NULL, users_df = NULL) {
 
 ######################################################################################################
 
-# Team leaderboard — aggregated from individual scores
+# Team leaderboard — trimmed mean of active members
+# Rules:
+#   - Only riders with >= 1 ride that month count as "active"
+#   - Teams with fewer than MIN_ACTIVE_RIDERS active members are excluded
+#   - Bottom TRIM_PCT % of active scores (rounded down) are dropped
+#   - Team score = mean of remaining scores
+MIN_ACTIVE_RIDERS <- 5
+TRIM_PCT          <- 0.20
+
 get_team_leaderboard <- function(data_dir, year_month = NULL, users_df = NULL) {
   ind <- get_leaderboard(data_dir, year_month = year_month, users_df = users_df)
   if (nrow(ind) == 0) return(data.frame())
   
+  # Keep only riders with a team assigned
   ind <- ind[!is.na(ind$team) & nzchar(ind$team), ]
   if (nrow(ind) == 0) return(data.frame())
   
-  team_lb <- aggregate(cbind(total_km, total_score, days_ridden) ~ team,
-                        data = ind, FUN = sum)
+  # All registered team members (for the "registered" count)
+  all_members <- if (!is.null(users_df) && "team" %in% names(users_df)) {
+    aggregate(name ~ team, data = users_df[!is.na(users_df$team) & nzchar(users_df$team), ],
+              FUN = length)
+  } else {
+    NULL
+  }
   
-  member_counts      <- aggregate(user ~ team, data = ind, FUN = length)
-  names(member_counts)[2] <- "members"
-  team_lb            <- merge(team_lb, member_counts, by = "team")
-  team_lb            <- team_lb[order(-team_lb$total_score), ]
-  team_lb$rank       <- seq_len(nrow(team_lb))
-  team_lb$total_km    <- round(team_lb$total_km, 2)
-  team_lb$total_score <- round(team_lb$total_score, 2)
-  team_lb[, c("rank", "team", "members", "days_ridden", "total_km", "total_score")]
+  teams <- unique(ind$team)
+  
+  team_rows <- lapply(teams, function(t) {
+    members <- ind[ind$team == t, ]
+    
+    active_count <- nrow(members)
+    
+    # Skip teams below the minimum active rider threshold
+    if (active_count < MIN_ACTIVE_RIDERS) return(NULL)
+    
+    # Sort scores ascending, drop bottom TRIM_PCT (floor)
+    scores         <- sort(members$total_score)
+    n_drop         <- floor(active_count * TRIM_PCT)
+    trimmed_scores <- if (n_drop > 0) scores[(n_drop + 1):length(scores)] else scores
+    
+    data.frame(
+      team         = t,
+      active_riders = active_count,
+      riders_counted = length(trimmed_scores),
+      riders_dropped = n_drop,
+      avg_score    = round(mean(trimmed_scores), 2),
+      total_km     = round(sum(members$total_km), 2)
+    )
+  })
+  
+  team_lb <- do.call(rbind, team_rows)
+  if (is.null(team_lb) || nrow(team_lb) == 0) return(data.frame())
+  
+  team_lb <- team_lb[order(-team_lb$avg_score), ]
+  team_lb$rank <- seq_len(nrow(team_lb))
+  
+  team_lb[, c("rank", "team", "active_riders", "riders_counted",
+              "riders_dropped", "total_km", "avg_score")]
 }
 
 ######################################################################################################
